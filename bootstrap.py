@@ -22,6 +22,19 @@ from urllib import urlencode
 from ConfigParser import SafeConfigParser
 
 
+"""Use YUM_OFFLINE to be independent of possibly unreachable repos."""
+YUM_OFFLINE="/usr/bin/yum -y --cacheonly --disablerepo=* "
+
+"""Colors to be used by the multiple `print_*` functions."""
+error_colors = {
+    'HEADER': '\033[95m',
+    'OKBLUE': '\033[94m',
+    'OKGREEN': '\033[92m',
+    'WARNING': '\033[93m',
+    'FAIL': '\033[91m',
+    'ENDC': '\033[0m',
+}
+
 def get_architecture():
     """
     Helper function to get the architecture x86_64 vs. x86.
@@ -35,16 +48,6 @@ def get_architecture():
         return "x86_64"
     else:
         return "x86"
-
-error_colors = {
-    'HEADER': '\033[95m',
-    'OKBLUE': '\033[94m',
-    'OKGREEN': '\033[92m',
-    'WARNING': '\033[93m',
-    'FAIL': '\033[91m',
-    'ENDC': '\033[0m',
-}
-"""Colors to be used by the multiple `print_*` functions."""
 
 
 def print_error(msg):
@@ -102,13 +105,12 @@ def exec_failexit(command):
     print_success(command)
     print ""
 
-
 def install_prereqs():
     """
     Install subscription manager and its prerequisites.
     """
     print_generic("Installing subscription manager prerequisites")
-    exec_failexit("/usr/bin/yum -y remove subscription-manager-gnome")
+    exec_failexit(YUM_OFFLINE + "erase subscription-manager-gnome")
     exec_failexit("/usr/bin/yum -y install subscription-manager subscription-manager-migration-*")
     exec_failexit("/usr/bin/yum -y update yum openssl")
 
@@ -121,7 +123,8 @@ def get_bootstrap_rpm():
     if options.force:
         clean_katello_agent()
     print_generic("Retrieving Client CA Certificate RPMs")
-    exec_failexit("rpm -Uvh http://%s/pub/katello-ca-consumer-latest.noarch.rpm" % options.foreman_fqdn)
+    # 'yum install' doesn't work, complains about missing repo.
+    exec_failexit(YUM_OFFLINE + "localinstall http://%s/pub/katello-ca-consumer-latest.noarch.rpm" % options.foreman_fqdn)
 
 
 def migrate_systems(org_name, activationkey):
@@ -165,11 +168,10 @@ def unregister_system():
     print_generic("Unregistering")
     exec_failexit("/usr/sbin/subscription-manager unregister")
 
-
 def clean_katello_agent():
     """Remove old Katello agent (aka Gofer) and certificate RPMs."""
     print_generic("Removing old Katello agent and certs")
-    exec_failexit("/usr/bin/yum -y erase katello-ca-consumer-* katello-agent gofer")
+    exec_failexit(YUM_OFFLINE + "erase katello-ca-consumer-* katello-agent gofer")
 
 
 def install_katello_agent():
@@ -183,7 +185,7 @@ def install_katello_agent():
 def clean_puppet():
     """Remove old Puppet Agent and its configuration"""
     print_generic("Cleaning old Puppet Agent")
-    exec_failexit("/usr/bin/yum -y erase puppet")
+    exec_failexit(YUM_OFFLINE + "erase puppet")
     exec_failexit("rm -rf /var/lib/puppet/")
 
 
@@ -229,7 +231,7 @@ def remove_obsolete_packages():
     """Remove old RHN packages"""
     pkg_list = "rhn-setup rhn-client-tools yum-rhn-plugin rhnsd rhn-check rhnlib spacewalk-abrt spacewalk-oscap osad rh-*-rhui-client"
     print_generic("Removing old RHN packages")
-    exec_failexit("/usr/bin/yum -y remove %s" % pkg_list)
+    exec_failexit(YUM_OFFLINE + "erase " + pkg_list)
 
 
 def fully_update_the_box():
